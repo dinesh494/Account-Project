@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounting Hub for Excel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx) library for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .modal-bg {
+            background-color: rgba(0,0,0,0.5);
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Accounting Hub</h1>
+            <p class="text-lg text-gray-600">Manage accounts and journal entries, then export to Excel.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Chart of Accounts & Journal Entry Form -->
+            <div class="lg:col-span-1 space-y-8">
+                
+                <!-- Chart of Accounts Section -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold">Chart of Accounts</h2>
+                        <button id="addAccountBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">Add Account</button>
+                    </div>
+                    <div id="accountsList" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        <!-- Accounts will be dynamically added here -->
+                    </div>
+                </div>
+
+                <!-- Journal Entry Form Section -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold mb-4">New Journal Entry</h2>
+                    <form id="journalEntryForm" class="space-y-4">
+                        <div>
+                            <label for="entryDate" class="block text-sm font-medium text-gray-700">Date</label>
+                            <input type="date" id="entryDate" name="entryDate" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" required>
+                        </div>
+                        <div>
+                            <label for="entryDescription" class="block text-sm font-medium text-gray-700">Description</label>
+                            <input type="text" id="entryDescription" name="entryDescription" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="e.g., Paid office rent" required>
+                        </div>
+                        <div id="entryLinesContainer" class="space-y-3">
+                            <!-- Entry line inputs will be added here -->
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <button type="button" id="addEntryLineBtn" class="text-blue-600 hover:text-blue-800 font-medium text-sm">+ Add Line</button>
+                            <div class="text-right">
+                                <p class="text-sm font-medium">Totals:</p>
+                                <p class="text-sm">Debits: <span id="totalDebits">0.00</span></p>
+                                <p class="text-sm">Credits: <span id="totalCredits">0.00</span></p>
+                            </div>
+                        </div>
+                        <p id="entryError" class="text-red-500 text-sm hidden">Total debits must equal total credits.</p>
+                        <button type="submit" class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold">Post Entry</button>
+                    </form>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Journal & Trial Balance -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- General Journal Section -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold">General Journal</h2>
+                        <button id="exportExcelBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                            Export to Excel
+                        </button>
+                    </div>
+                    <div class="max-h-[40rem] overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description/Account</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="journalEntriesBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Journal entries will be added here -->
+                                <tr id="no-entries-row"><td colspan="4" class="text-center py-4 text-gray-500">No journal entries yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Trial Balance Section -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold mb-4">Trial Balance</h2>
+                     <div class="max-h-96 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trialBalanceBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Trial balance data will be added here -->
+                            </tbody>
+                            <tfoot class="bg-gray-50 font-bold">
+                                <tr>
+                                    <td class="px-6 py-3 text-left text-xs uppercase tracking-wider">Totals</td>
+                                    <td id="trialBalanceDebitTotal" class="px-6 py-3 text-right">0.00</td>
+                                    <td id="trialBalanceCreditTotal" class="px-6 py-3 text-right">0.00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Account Modal -->
+    <div id="accountModal" class="fixed inset-0 modal-bg z-50 flex justify-center items-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 id="modalTitle" class="text-2xl font-semibold mb-6">Add New Account</h3>
+            <form id="accountForm">
+                <input type="hidden" id="editAccountId" value="">
+                <div class="space-y-4">
+                    <div>
+                        <label for="accountNumber" class="block text-sm font-medium text-gray-700">Account Number</label>
+                        <input type="number" id="accountNumber" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" required>
+                    </div>
+                    <div>
+                        <label for="accountName" class="block text-sm font-medium text-gray-700">Account Name</label>
+                        <input type="text" id="accountName" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" required>
+                    </div>
+                    <div>
+                        <label for="accountType" class="block text-sm font-medium text-gray-700">Account Type</label>
+                        <select id="accountType" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2">
+                            <option>Asset</option>
+                            <option>Liability</option>
+                            <option>Equity</option>
+                            <option>Revenue</option>
+                            <option>Expense</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button type="button" id="cancelAccountBtn" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                    <button type="submit" id="saveAccountBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Save Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // State Management
+            let accounts = [];
+            let journalEntries = [];
+
+            // DOM Elements
+            const addAccountBtn = document.getElementById('addAccountBtn');
+            const accountModal = document.getElementById('accountModal');
+            const cancelAccountBtn = document.getElementById('cancelAccountBtn');
+            const accountForm = document.getElementById('accountForm');
+            const modalTitle = document.getElementById('modalTitle');
+            const saveAccountBtn = document.getElementById('saveAccountBtn');
+            const accountsList = document.getElementById('accountsList');
+            const editAccountId = document.getElementById('editAccountId');
+            
+            const journalEntryForm = document.getElementById('journalEntryForm');
+            const entryLinesContainer = document.getElementById('entryLinesContainer');
+            const addEntryLineBtn = document.getElementById('addEntryLineBtn');
+            const totalDebitsEl = document.getElementById('totalDebits');
+            const totalCreditsEl = document.getElementById('totalCredits');
+            const entryError = document.getElementById('entryError');
+            
+            const journalEntriesBody = document.getElementById('journalEntriesBody');
+            const trialBalanceBody = document.getElementById('trialBalanceBody');
+            const trialBalanceDebitTotal = document.getElementById('trialBalanceDebitTotal');
+            const trialBalanceCreditTotal = document.getElementById('trialBalanceCreditTotal');
+            
+            const exportExcelBtn = document.getElementById('exportExcelBtn');
+            const noEntriesRow = document.getElementById('no-entries-row');
+
+            // --- LOCAL STORAGE FUNCTIONS ---
+            function loadFromStorage() {
+                const storedAccounts = localStorage.getItem('accounts');
+                const storedEntries = localStorage.getItem('journalEntries');
+                if (storedAccounts) {
+                    accounts = JSON.parse(storedAccounts);
+                }
+                if (storedEntries) {
+                    journalEntries = JSON.parse(storedEntries);
+                }
+                // Add default accounts if none exist
+                if (accounts.length === 0) {
+                    addDefaultAccounts();
+                }
+            }
+
+            function saveToStorage() {
+                localStorage.setItem('accounts', JSON.stringify(accounts));
+                localStorage.setItem('journalEntries', JSON.stringify(journalEntries));
+            }
+            
+            function addDefaultAccounts() {
+                 accounts.push(
+                    { id: 101, number: 1010, name: 'Cash', type: 'Asset' },
+                    { id: 120, number: 1200, name: 'Accounts Receivable', type: 'Asset' },
+                    { id: 201, number: 2010, name: 'Accounts Payable', type: 'Liability' },
+                    { id: 301, number: 3010, name: 'Owner\'s Capital', type: 'Equity' },
+                    { id: 401, number: 4010, name: 'Service Revenue', type: 'Revenue' },
+                    { id: 501, number: 5010, name: 'Rent Expense', type: 'Expense' }
+                );
+                saveToStorage();
+            }
+
+            // --- MODAL FUNCTIONS ---
+            function openModal(mode = 'add', account = null) {
+                accountForm.reset();
+                if (mode === 'edit' && account) {
+                    modalTitle.textContent = 'Edit Account';
+                    saveAccountBtn.textContent = 'Update Account';
+                    document.getElementById('accountNumber').value = account.number;
+                    document.getElementById('accountName').value = account.name;
+                    document.getElementById('accountType').value = account.type;
+                    editAccountId.value = account.id;
+                } else {
+                    modalTitle.textContent = 'Add New Account';
+                    saveAccountBtn.textContent = 'Save Account';
+                    editAccountId.value = '';
+                }
+                accountModal.classList.remove('hidden');
+            }
+
+            function closeModal() {
+                accountModal.classList.add('hidden');
+            }
+
+            // --- ACCOUNT MANAGEMENT ---
+            function renderAccounts() {
+                accountsList.innerHTML = '';
+                if(accounts.length === 0) {
+                    accountsList.innerHTML = '<p class="text-gray-500 text-sm">No accounts created yet.</p>';
+                    return;
+                }
+                
+                // Sort accounts by number
+                const sortedAccounts = [...accounts].sort((a,b) => a.number - b.number);
+
+                sortedAccounts.forEach(acc => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center p-2 rounded-md hover:bg-gray-100';
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-medium">${acc.name} (${acc.number})</p>
+                            <p class="text-sm text-gray-500">${acc.type}</p>
+                        </div>
+                        <div>
+                            <button class="edit-btn text-sm text-blue-500 hover:text-blue-700" data-id="${acc.id}">Edit</button>
+                        </div>
+                    `;
+                    accountsList.appendChild(div);
+                });
+            }
+
+            function handleAccountFormSubmit(e) {
+                e.preventDefault();
+                const id = editAccountId.value;
+                const newAccount = {
+                    number: parseInt(document.getElementById('accountNumber').value, 10),
+                    name: document.getElementById('accountName').value,
+                    type: document.getElementById('accountType').value
+                };
+
+                if (id) { // Editing existing account
+                    const index = accounts.findIndex(acc => acc.id == id);
+                    if(index !== -1) {
+                       accounts[index] = { ...accounts[index], ...newAccount };
+                    }
+                } else { // Adding new account
+                    newAccount.id = Date.now();
+                    accounts.push(newAccount);
+                }
+                
+                saveToStorage();
+                renderAll();
+                closeModal();
+            }
+
+            accountsList.addEventListener('click', e => {
+                if (e.target.classList.contains('edit-btn')) {
+                    const accountId = e.target.dataset.id;
+                    const accountToEdit = accounts.find(acc => acc.id == accountId);
+                    if (accountToEdit) {
+                        openModal('edit', accountToEdit);
+                    }
+                }
+            });
+
+
+            // --- JOURNAL ENTRY MANAGEMENT ---
+            function createEntryLine(isFirstLine = false) {
+                const lineId = Date.now() + Math.random();
+                const div = document.createElement('div');
+                div.className = 'grid grid-cols-12 gap-2 items-center entry-line';
+                div.innerHTML = `
+                    <div class="col-span-6">
+                        <select class="account-select w-full border-gray-300 rounded-md shadow-sm p-2" required>
+                            <option value="">Select Account...</option>
+                            ${accounts.map(acc => `<option value="${acc.id}">${acc.name} (${acc.number})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <input type="number" step="0.01" class="debit-input w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Debit">
+                    </div>
+                    <div class="col-span-2">
+                        <input type="number" step="0.01" class="credit-input w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Credit">
+                    </div>
+                    <div class="col-span-2 flex justify-end">
+                      ${!isFirstLine ? `<button type="button" class="remove-line-btn text-red-500 hover:text-red-700">✖</button>` : ''}
+                    </div>
+                `;
+                entryLinesContainer.appendChild(div);
+
+                div.querySelector('.remove-line-btn')?.addEventListener('click', () => {
+                    div.remove();
+                    updateEntryTotals();
+                });
+            }
+
+            function updateEntryTotals() {
+                let totalDebits = 0;
+                let totalCredits = 0;
+                document.querySelectorAll('.entry-line').forEach(line => {
+                    const debit = parseFloat(line.querySelector('.debit-input').value) || 0;
+                    const credit = parseFloat(line.querySelector('.credit-input').value) || 0;
+                    totalDebits += debit;
+                    totalCredits += credit;
+                });
+                totalDebitsEl.textContent = totalDebits.toFixed(2);
+                totalCreditsEl.textContent = totalCredits.toFixed(2);
+                
+                if(Math.abs(totalDebits - totalCredits) > 0.001) {
+                   entryError.classList.remove('hidden');
+                } else {
+                   entryError.classList.add('hidden');
+                }
+            }
+            
+            entryLinesContainer.addEventListener('input', updateEntryTotals);
+            
+            function handleJournalEntrySubmit(e) {
+                e.preventDefault();
+                
+                let totalDebits = 0;
+                let totalCredits = 0;
+                const lines = [];
+
+                document.querySelectorAll('.entry-line').forEach(line => {
+                    const accountId = line.querySelector('.account-select').value;
+                    const debit = parseFloat(line.querySelector('.debit-input').value) || 0;
+                    const credit = parseFloat(line.querySelector('.credit-input').value) || 0;
+                    if (accountId && (debit > 0 || credit > 0)) {
+                       lines.push({ accountId, debit, credit });
+                       totalDebits += debit;
+                       totalCredits += credit;
+                    }
+                });
+
+                if (lines.length < 2 || Math.abs(totalDebits - totalCredits) > 0.001) {
+                    entryError.classList.remove('hidden');
+                    return;
+                }
+                entryError.classList.add('hidden');
+                
+                const newEntry = {
+                    id: Date.now(),
+                    date: document.getElementById('entryDate').value,
+                    description: document.getElementById('entryDescription').value,
+                    lines: lines
+                };
+                
+                journalEntries.push(newEntry);
+                saveToStorage();
+                renderAll();
+                
+                journalEntryForm.reset();
+                entryLinesContainer.innerHTML = '';
+                addInitialEntryLines();
+                updateEntryTotals();
+            }
+
+            function renderJournal() {
+                journalEntriesBody.innerHTML = '';
+                if(journalEntries.length === 0){
+                    noEntriesRow.classList.remove('hidden');
+                    return;
+                }
+                noEntriesRow.classList.add('hidden');
+
+                const sortedEntries = [...journalEntries].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+                sortedEntries.forEach(entry => {
+                    const entryRow = document.createElement('tr');
+                    entryRow.className = 'bg-gray-50';
+                    entryRow.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap font-medium">${entry.date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-800" colspan="3">${entry.description}</td>
+                    `;
+                    journalEntriesBody.appendChild(entryRow);
+
+                    entry.lines.forEach(line => {
+                        const account = accounts.find(a => a.id == line.accountId);
+                        if (!account) return;
+
+                        const lineRow = document.createElement('tr');
+                        lineRow.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap"></td>
+                            <td class="pl-12 pr-6 py-4 whitespace-nowrap text-sm text-gray-700">${account.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm">${line.debit > 0 ? line.debit.toFixed(2) : ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm">${line.credit > 0 ? line.credit.toFixed(2) : ''}</td>
+                        `;
+                        journalEntriesBody.appendChild(lineRow);
+                    });
+                });
+            }
+
+            // --- TRIAL BALANCE ---
+            function renderTrialBalance() {
+                trialBalanceBody.innerHTML = '';
+                const balances = new Map();
+
+                accounts.forEach(acc => {
+                    balances.set(acc.id, { name: acc.name, debit: 0, credit: 0, type: acc.type });
+                });
+
+                journalEntries.forEach(entry => {
+                    entry.lines.forEach(line => {
+                        const balance = balances.get(parseInt(line.accountId));
+                        if(balance){
+                            balance.debit += line.debit;
+                            balance.credit += line.credit;
+                        }
+                    });
+                });
+
+                let totalDebit = 0;
+                let totalCredit = 0;
+
+                const sortedBalances = [...balances.values()].filter(b => b.debit > 0 || b.credit > 0)
+                                        .sort((a,b) => a.name.localeCompare(b.name));
+
+                sortedBalances.forEach(balance => {
+                    let finalDebit = 0;
+                    let finalCredit = 0;
+                    const netBalance = balance.debit - balance.credit;
+
+                    if (['Asset', 'Expense'].includes(balance.type)) {
+                        if (netBalance > 0) finalDebit = netBalance;
+                        else finalCredit = -netBalance;
+                    } else { // Liability, Equity, Revenue
+                        if (netBalance < 0) finalCredit = -netBalance;
+                        else finalDebit = netBalance;
+                    }
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap">${balance.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">${finalDebit > 0 ? finalDebit.toFixed(2) : ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">${finalCredit > 0 ? finalCredit.toFixed(2) : ''}</td>
+                    `;
+                    trialBalanceBody.appendChild(row);
+
+                    totalDebit += finalDebit;
+                    totalCredit += finalCredit;
+                });
+                
+                trialBalanceDebitTotal.textContent = totalDebit.toFixed(2);
+                trialBalanceCreditTotal.textContent = totalCredit.toFixed(2);
+                
+                if (Math.abs(totalDebit - totalCredit) > 0.001) {
+                    trialBalanceDebitTotal.classList.add('text-red-500');
+                    trialBalanceCreditTotal.classList.add('text-red-500');
+                } else {
+                    trialBalanceDebitTotal.classList.remove('text-red-500');
+                    trialBalanceCreditTotal.classList.remove('text-red-500');
+                }
+            }
+
+            // --- EXCEL EXPORT ---
+            function exportToExcel() {
+                const wb = XLSX.utils.book_new();
+
+                // 1. Chart of Accounts Sheet
+                const coa_data = accounts.map(acc => ({
+                    'Account Number': acc.number,
+                    'Account Name': acc.name,
+                    'Type': acc.type
+                }));
+                const ws_coa = XLSX.utils.json_to_sheet(coa_data);
+                XLSX.utils.book_append_sheet(wb, ws_coa, "Chart of Accounts");
+
+                // 2. Journal Entries Sheet
+                const journal_data = [];
+                journalEntries.forEach(entry => {
+                    entry.lines.forEach(line => {
+                         const account = accounts.find(a => a.id == line.accountId);
+                         journal_data.push({
+                             'Date': entry.date,
+                             'Description': entry.description,
+                             'Account': account ? account.name : 'Unknown',
+                             'Debit': line.debit,
+                             'Credit': line.credit
+                         });
+                    });
+                });
+                const ws_journal = XLSX.utils.json_to_sheet(journal_data);
+                XLSX.utils.book_append_sheet(wb, ws_journal, "Journal Entries");
+                
+                // 3. Trial Balance Sheet
+                const tb_body = document.getElementById('trialBalanceBody');
+                const tb_data = [];
+                tb_body.querySelectorAll('tr').forEach(row => {
+                    const cols = row.querySelectorAll('td');
+                    tb_data.push({
+                        'Account': cols[0].textContent,
+                        'Debit': parseFloat(cols[1].textContent) || 0,
+                        'Credit': parseFloat(cols[2].textContent) || 0,
+                    })
+                });
+                const ws_tb = XLSX.utils.json_to_sheet(tb_data);
+                 // Add totals to trial balance sheet
+                const debitTotal = parseFloat(trialBalanceDebitTotal.textContent);
+                const creditTotal = parseFloat(trialBalanceCreditTotal.textContent);
+                XLSX.utils.sheet_add_aoa(ws_tb, [
+                    ["", "", ""],
+                    ["Totals", debitTotal, creditTotal]
+                ], { origin: -1 });
+
+                XLSX.utils.book_append_sheet(wb, ws_tb, "Trial Balance");
+
+                // Save the workbook
+                XLSX.writeFile(wb, "Accounting_Data.xlsx");
+            }
+
+            // --- INITIALIZATION ---
+            function renderAll() {
+                renderAccounts();
+                renderJournal();
+                renderTrialBalance();
+                // We need to re-populate the dropdowns in the journal entry form if accounts change
+                const currentEntryLines = entryLinesContainer.innerHTML;
+                entryLinesContainer.innerHTML = '';
+                addInitialEntryLines();
+            }
+
+            function addInitialEntryLines() {
+                entryLinesContainer.innerHTML = '';
+                createEntryLine(true);
+                createEntryLine(true);
+                document.getElementById('entryDate').valueAsDate = new Date();
+            }
+
+            // --- Event Listeners ---
+            addAccountBtn.addEventListener('click', () => openModal('add'));
+            cancelAccountBtn.addEventListener('click', closeModal);
+            accountForm.addEventListener('submit', handleAccountFormSubmit);
+            
+            addEntryLineBtn.addEventListener('click', () => createEntryLine());
+            journalEntryForm.addEventListener('submit', handleJournalEntrySubmit);
+
+            exportExcelBtn.addEventListener('click', exportToExcel);
+
+            // --- Initial Load ---
+            loadFromStorage();
+            renderAll();
+            addInitialEntryLines();
+
+        });
+    </script>
+</body>
+</html>
